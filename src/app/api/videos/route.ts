@@ -19,9 +19,12 @@ export async function GET() {
 
     return NextResponse.json(videos);
   } catch (error) {
-    console.error("Error fetching videos:", error);
+    console.error("Database error:", error);
     return NextResponse.json(
-      { error: "Error fetching videos" },
+      {
+        error: "Failed to fetch videos",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
@@ -82,9 +85,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(video);
   } catch (error) {
-    console.error("Error creating video:", error);
+    console.error("Database error:", error);
     return NextResponse.json(
-      { error: "Error creating video" },
+      {
+        error: "Failed to create video",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
