@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeftIcon, CheckIcon } from "@heroicons/react/24/outline";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { VideoStatus } from "./HomeClient";
 import { getStatusColorClasses, getStatusIcon } from "@/utils/statusColors";
 import Image from "next/image";
@@ -41,14 +41,29 @@ export default function VideoDetailClient({
 }: {
   video: VideoIdea;
 }) {
-  const [video, setVideo] = useState(initialVideo);
+  const [video, setVideo] = useState({
+    ...initialVideo,
+    plannedDate:
+      typeof initialVideo.plannedDate === "string"
+        ? parseISO(initialVideo.plannedDate)
+        : initialVideo.plannedDate,
+    finishDate:
+      initialVideo.finishDate && typeof initialVideo.finishDate === "string"
+        ? parseISO(initialVideo.finishDate)
+        : initialVideo.finishDate,
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     title: video.title,
     description: video.description || "",
     script: video.script || "",
     metadata: video.metadata || { tags: [], category: "" },
-    plannedDate: format(video.plannedDate, "yyyy-MM-dd"),
+    plannedDate: format(
+      typeof video.plannedDate === "string"
+        ? parseISO(video.plannedDate)
+        : video.plannedDate,
+      "yyyy-MM-dd"
+    ),
   });
 
   const handleTaskToggle = async (taskId: string) => {
@@ -353,7 +368,12 @@ export default function VideoDetailClient({
                           Planned Date
                         </dt>
                         <dd className="mt-1 text-white">
-                          {format(new Date(video.plannedDate), "MMM d, yyyy")}
+                          {format(
+                            typeof video.plannedDate === "string"
+                              ? parseISO(video.plannedDate)
+                              : video.plannedDate,
+                            "MMM d, yyyy"
+                          )}
                         </dd>
                       </div>
                       <div>

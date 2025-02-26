@@ -1,25 +1,21 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "YouTube Video Planner",
-  description: "Plan and manage your YouTube content",
+  description: "Plan and manage your YouTube video content",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en">
-      <body
-        className={`${inter.className} bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 min-h-screen`}
-      >
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className="bg-[#111e19] text-white">
+        <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
       </body>
     </html>
   );

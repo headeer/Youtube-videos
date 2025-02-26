@@ -11,6 +11,18 @@ const nextConfig = {
   },
   images: {
     domains: ["example.com"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**",
+      },
+    ],
+  },
+  // Suppress hydration warnings in production
+  reactStrictMode: false,
+  // Handle browser extensions adding attributes
+  compiler: {
+    styledComponents: true,
   },
 };
 
