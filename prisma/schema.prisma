@@ -9,8 +9,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model VideoIdea {
@@ -32,16 +33,18 @@ model VideoIdea {
 }
 
 model Task {
-  id          String     @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
-  isCompleted Boolean    @default(false)
+  isCompleted Boolean   @default(false)
   phase       TaskPhase
   order       Int
   notes       String?    // Add notes field for task-specific information
-  videoIdea   VideoIdea  @relation(fields: [videoIdeaId], references: [id], onDelete: Cascade)
+  videoIdea   VideoIdea @relation(fields: [videoIdeaId], references: [id], onDelete: Cascade)
   videoIdeaId String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([videoIdeaId])
 }
 
 model Topic {

@@ -8,7 +8,6 @@ import {
   ExclamationCircleIcon,
   FunnelIcon,
   TrashIcon,
-  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 import NewVideoModal from "./NewVideoModal";
 import { getStatusColorClasses, getStatusIcon } from "@/utils/statusColors";
@@ -247,35 +246,23 @@ export default function HomeClient() {
                       onChange={(e) =>
                         setFilters({ ...filters, dateFrom: e.target.value })
                       }
-                      className="block w-full rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] py-2.5 pl-3 pr-10 cursor-pointer"
+                      className="block w-full rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] py-2.5 pl-3 pr-2 cursor-pointer"
                     />
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                      <CalendarDaysIcon
-                        className="h-5 w-5 text-gray-400"
-                        aria-hidden="true"
-                      />
-                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-200">
                     To
                   </label>
-                  <div className="relative">
+                  <div className="relative w-full">
                     <input
                       type="date"
                       value={filters.dateTo}
                       onChange={(e) =>
                         setFilters({ ...filters, dateTo: e.target.value })
                       }
-                      className="block w-full rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] py-2.5 pl-3 pr-10 cursor-pointer"
+                      className="block w-full rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] py-2.5 pl-3 pr-2 cursor-pointer"
                     />
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                      <CalendarDaysIcon
-                        className="h-5 w-5 text-gray-400"
-                        aria-hidden="true"
-                      />
-                    </div>
                   </div>
                 </div>
               </div>
