@@ -6,6 +6,7 @@ import { ArrowLeftIcon, CheckIcon } from "@heroicons/react/24/outline";
 import { format } from "date-fns";
 import { VideoStatus } from "./HomeClient";
 import { getStatusColorClasses, getStatusIcon } from "@/utils/statusColors";
+import Image from "next/image";
 
 interface Task {
   id: string;
@@ -295,9 +296,11 @@ export default function VideoDetailClient({
                         </label>
                         <div className="flex items-center gap-4">
                           {video.thumbnailUrl && (
-                            <img
+                            <Image
                               src={video.thumbnailUrl}
-                              alt="Video thumbnail"
+                              alt={`Thumbnail for ${video.title}`}
+                              width={128}
+                              height={128}
                               className="w-32 h-32 object-cover rounded-lg"
                             />
                           )}
@@ -379,48 +382,19 @@ export default function VideoDetailClient({
                     Thumbnail
                   </h2>
                   {video.thumbnailUrl ? (
-                    <div className="relative aspect-video rounded-lg overflow-hidden">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                    <div className="relative w-full h-48 mb-4">
+                      <Image
                         src={video.thumbnailUrl}
-                        alt="Video thumbnail"
-                        className="object-cover"
+                        alt={`Thumbnail for ${video.title}`}
+                        fill
+                        className="object-cover rounded-lg"
+                        sizes="(max-width: 768px) 100vw, 600px"
+                        priority
                       />
-                      {isEditing && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                          <label className="cursor-pointer">
-                            <span className="rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600">
-                              Change Thumbnail
-                            </span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleThumbnailUpload(file);
-                              }}
-                            />
-                          </label>
-                        </div>
-                      )}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center aspect-video rounded-lg border-2 border-dashed border-white/20">
-                      <label className="cursor-pointer">
-                        <span className="rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600">
-                          Upload Thumbnail
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleThumbnailUpload(file);
-                          }}
-                        />
-                      </label>
+                    <div className="w-full h-48 bg-gray-200 rounded-lg mb-4 flex items-center justify-center">
+                      <p className="text-gray-500">No thumbnail available</p>
                     </div>
                   )}
                 </div>
