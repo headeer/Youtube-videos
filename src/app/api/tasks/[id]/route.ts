@@ -26,16 +26,15 @@ const STATUS_ORDER: VideoStatus[] = [
   "COMPLETED",
 ];
 
-type RouteContext = {
+type Context = {
   params: {
     id: string;
   };
 };
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
-  const { id } = context.params;
-
-  if (!id) {
+export async function PATCH(request: NextRequest, context: Context) {
+  const taskId = context.params.id;
+  if (!taskId) {
     return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
   }
 
@@ -54,7 +53,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     // Update the task
     const task = await prisma.task.update({
-      where: { id },
+      where: { id: taskId },
       data: updateData,
       include: {
         videoIdea: {
