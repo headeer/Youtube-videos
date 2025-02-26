@@ -5,10 +5,7 @@ import { VideoStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-type Props = {
-  params: { id: string };
-};
+export const fetchCache = "force-no-store";
 
 interface Task {
   id: string;
@@ -39,22 +36,27 @@ interface VideoIdea {
 }
 
 async function getVideo(id: string): Promise<VideoIdea | null> {
-  const video = await prisma.videoIdea.findUnique({
-    where: { id },
-    include: {
-      tasks: {
-        orderBy: {
-          order: "asc",
+  try {
+    const video = await prisma.videoIdea.findUnique({
+      where: { id },
+      include: {
+        tasks: {
+          orderBy: {
+            order: "asc",
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!video) {
+    if (!video) {
+      return null;
+    }
+
+    return video as VideoIdea;
+  } catch (error) {
+    console.error("Error fetching video:", error);
     return null;
   }
-
-  return video as VideoIdea;
 }
 
 export default async function VideoDetailPage({
@@ -62,6 +64,10 @@ export default async function VideoDetailPage({
 }: {
   params: { id: string };
 }) {
+  if (!params?.id) {
+    notFound();
+  }
+
   const video = await getVideo(params.id);
 
   if (!video) {

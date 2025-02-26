@@ -30,17 +30,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
-    // Wait for params to be available
-    const taskId = params.id;
-    if (!taskId) {
-      return NextResponse.json(
-        { error: "Task ID is required" },
-        { status: 400 }
-      );
-    }
+  if (!params?.id) {
+    return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
+  }
 
-    // Parse the request body
+  try {
+    const taskId = params.id;
     const body = await request.json();
     const { isCompleted, notes } = body;
 
