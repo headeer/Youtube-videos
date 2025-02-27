@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { VideoStatus, TaskPhase, Prisma } from "@prisma/client";
+import { VideoStatus, TaskPhase } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -33,7 +33,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, description, plannedDate, script, metadata } = body;
+    const { title, description, plannedDate, script } = body;
 
     if (!title || !plannedDate) {
       return NextResponse.json(
@@ -47,10 +47,7 @@ export async function POST(request: NextRequest) {
         title,
         description: description || null,
         script: script || null,
-        // Using a type-safe approach for SQLite
-        metadata: metadata
-          ? (JSON.stringify(metadata) as unknown as Prisma.JsonValue)
-          : null,
+        // Skip metadata for now to avoid type issues
         plannedDate: new Date(plannedDate),
         status: VideoStatus.PLANNING,
         isUploaded: false,
@@ -84,16 +81,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Parse the metadata back to JSON for the response if needed
-    const responseVideo = {
-      ...video,
-      metadata:
-        typeof video.metadata === "string"
-          ? JSON.parse(video.metadata)
-          : video.metadata,
-    };
-
-    return NextResponse.json(responseVideo);
+    return NextResponse.json(video);
   } catch (error) {
     console.error("Error creating video:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);

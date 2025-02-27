@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { initializeDatabase } from "./db-init";
 
 // Use global type declaration
 declare global {
@@ -19,6 +20,17 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
+}
+
+// Initialize the database if needed
+if (process.env.NODE_ENV !== "production") {
+  initializeDatabase()
+    .then(() => {
+      console.log("Database initialization check completed");
+    })
+    .catch((e) => {
+      console.error("Database initialization failed:", e);
+    });
 }
 
 // Ensure the connection is established

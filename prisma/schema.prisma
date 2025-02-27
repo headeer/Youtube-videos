@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,64 +7,45 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-enum VideoStatus {
-  PLANNING
-  SCRIPTING
-  RECORDING
-  EDITING
-  PACKAGING
-  DISTRIBUTION
-  COMPLETED
-}
-
-enum TaskPhase {
-  PLANNING
-  RECORDING
-  EDITING
-  THUMBNAIL
-  METADATA
-  DISTRIBUTION
-}
-
 model VideoIdea {
   id           String      @id @default(cuid())
   title        String
   description  String?
   script       String?
-  metadata     String?     // Changed from Json to String for SQLite compatibility
+  metadata     String?
   thumbnailUrl String?
-  status       VideoStatus @default(PLANNING)
+  status       String      @default("PLANNING")
   isUploaded   Boolean     @default(false)
   plannedDate  DateTime
   finishDate   DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
-  tasks        Task[]
   excuseUses   ExcuseUse[]
-  topics       Topic[]
+  tasks        Task[]
+  topics       Topic[]     @relation("TopicToVideoIdea")
 }
 
 model Task {
   id          String    @id @default(cuid())
   title       String
   isCompleted Boolean   @default(false)
-  phase       TaskPhase
+  phase       String
   order       Int
   notes       String?
+  videoIdeaId String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   videoIdea   VideoIdea @relation(fields: [videoIdeaId], references: [id], onDelete: Cascade)
-  videoIdeaId String
 }
 
 model Topic {
-  id          String      @id @default(cuid())
-  name        String
-  isTrending  Boolean     @default(false)
-  trendScore  Float?
-  videoIdeas  VideoIdea[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  name       String
+  isTrending Boolean     @default(false)
+  trendScore Float?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  videoIdeas VideoIdea[] @relation("TopicToVideoIdea")
 }
 
 model Excuse {
@@ -83,9 +58,9 @@ model Excuse {
 
 model ExcuseUse {
   id          String    @id @default(cuid())
-  excuse      Excuse    @relation(fields: [excuseId], references: [id], onDelete: Cascade)
   excuseId    String
-  videoIdea   VideoIdea @relation(fields: [videoIdeaId], references: [id], onDelete: Cascade)
   videoIdeaId String
   createdAt   DateTime  @default(now())
+  videoIdea   VideoIdea @relation(fields: [videoIdeaId], references: [id], onDelete: Cascade)
+  excuse      Excuse    @relation(fields: [excuseId], references: [id], onDelete: Cascade)
 }
