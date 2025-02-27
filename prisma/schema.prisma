@@ -1,45 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VideoStatus {
+  PLANNING
+  RECORDING
+  EDITING
+  PUBLISHED
+}
+
+enum TaskPhase {
+  PLANNING
+  RECORDING
+  EDITING
+  THUMBNAIL
+  METADATA
+  DISTRIBUTION
 }
 
 model VideoIdea {
-  id           String      @id @default(cuid())
+  id           String      @id @default(uuid())
   title        String
   description  String?
   script       String?
-  metadata     String?
+  metadata     Json?
   thumbnailUrl String?
-  status       String      @default("PLANNING")
-  isUploaded   Boolean     @default(false)
   plannedDate  DateTime
   finishDate   DateTime?
+  status       VideoStatus @default(PLANNING)
+  isUploaded   Boolean     @default(false)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
-  excuseUses   ExcuseUse[]
   tasks        Task[]
+  excuseUses   ExcuseUse[]
   topics       Topic[]     @relation("TopicToVideoIdea")
 }
 
 model Task {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid())
   title       String
-  isCompleted Boolean   @default(false)
-  phase       String
+  completed   Boolean   @default(false)
+  phase       TaskPhase
   order       Int
   notes       String?
-  videoIdeaId String
+  videoId     String
+  video       VideoIdea @relation(fields: [videoId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  videoIdea   VideoIdea @relation(fields: [videoIdeaId], references: [id], onDelete: Cascade)
 }
 
 model Topic {
-  id         String      @id @default(cuid())
+  id         String      @id @default(uuid())
   name       String
   isTrending Boolean     @default(false)
   trendScore Float?
@@ -49,7 +68,7 @@ model Topic {
 }
 
 model Excuse {
-  id        String      @id @default(cuid())
+  id        String      @id @default(uuid())
   text      String
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
@@ -57,7 +76,7 @@ model Excuse {
 }
 
 model ExcuseUse {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid())
   excuseId    String
   videoIdeaId String
   createdAt   DateTime  @default(now())

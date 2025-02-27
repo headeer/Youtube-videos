@@ -33,7 +33,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, description, plannedDate, script } = body;
+    const { title, description, plannedDate, script, metadata } = body;
 
     if (!title || !plannedDate) {
       return NextResponse.json(
@@ -42,12 +42,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Process metadata to ensure it's valid JSON for PostgreSQL
+    let processedMetadata = null;
+    if (metadata) {
+      processedMetadata =
+        typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+    }
+
     const video = await prisma.videoIdea.create({
       data: {
         title,
         description: description || null,
         script: script || null,
-        // Skip metadata for now to avoid type issues
+        metadata: processedMetadata,
         plannedDate: new Date(plannedDate),
         status: VideoStatus.PLANNING,
         isUploaded: false,
