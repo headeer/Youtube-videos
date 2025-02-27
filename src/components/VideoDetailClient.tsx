@@ -4,17 +4,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeftIcon, CheckIcon } from "@heroicons/react/24/outline";
 import { format, parseISO } from "date-fns";
-import { VideoStatus } from "./HomeClient";
+import { VideoStatus, TaskPhase } from "@prisma/client";
 import { getStatusColorClasses, getStatusIcon } from "@/utils/statusColors";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import TaskList from "./TaskList";
 
-interface Task {
+interface ClientTask {
   id: string;
   title: string;
   isCompleted: boolean;
-  phase: string;
+  phase: TaskPhase;
   order: number;
-  notes?: string;
+  notes?: string | null;
+  videoIdeaId: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface VideoMetadata {
@@ -25,115 +30,73 @@ interface VideoMetadata {
 interface VideoIdea {
   id: string;
   title: string;
-  description: string | null;
-  script: string | null;
-  metadata: VideoMetadata | null;
-  thumbnailUrl: string | null;
+  description?: string | null;
+  script?: string | null;
+  metadata?: Record<string, unknown>;
+  thumbnailUrl?: string | null;
+  plannedDate: Date;
   status: VideoStatus;
   isUploaded: boolean;
-  plannedDate: Date;
-  finishDate: Date | null;
-  tasks: Task[];
+  createdAt: Date;
+  updatedAt: Date;
+  tasks: ClientTask[];
 }
 
-export default function VideoDetailClient({
-  video: initialVideo,
-}: {
+interface VideoDetailClientProps {
   video: VideoIdea;
-}) {
-  const [video, setVideo] = useState({
-    ...initialVideo,
-    plannedDate:
-      typeof initialVideo.plannedDate === "string"
-        ? parseISO(initialVideo.plannedDate)
-        : initialVideo.plannedDate,
-    finishDate:
-      initialVideo.finishDate && typeof initialVideo.finishDate === "string"
-        ? parseISO(initialVideo.finishDate)
-        : initialVideo.finishDate,
-  });
+}
+
+export default function VideoDetailClient({ video }: VideoDetailClientProps) {
+  const router = useRouter();
+  const [currentVideo, setCurrentVideo] = useState<VideoIdea>(video);
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({
-    title: video.title,
-    description: video.description || "",
-    script: video.script || "",
-    metadata: video.metadata || { tags: [], category: "" },
-    plannedDate: format(
-      typeof video.plannedDate === "string"
-        ? parseISO(video.plannedDate)
-        : video.plannedDate,
-      "yyyy-MM-dd"
-    ),
-  });
-
-  const handleTaskToggle = async (taskId: string) => {
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          isCompleted: !video.tasks.find((t) => t.id === taskId)?.isCompleted,
-        }),
-      });
-
-      if (response.ok) {
-        const updatedTask = await response.json();
-        setVideo((prev) => ({
-          ...prev,
-          tasks: updatedTask.videoIdea.tasks,
-        }));
-      }
-    } catch (error) {
-      console.error("Error updating task:", error);
-    }
-  };
-
-  const handleTaskNoteUpdate = async (taskId: string, notes: string) => {
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ notes }),
-      });
-
-      if (response.ok) {
-        const updatedTask = await response.json();
-        setVideo((prev) => ({
-          ...prev,
-          tasks: updatedTask.videoIdea.tasks,
-        }));
-      }
-    } catch (error) {
-      console.error("Error updating task notes:", error);
-    }
-  };
+  const [title, setTitle] = useState(video.title);
+  const [description, setDescription] = useState(video.description || "");
+  const [script, setScript] = useState(video.script || "");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
     try {
+      setIsSaving(true);
+      setError(null);
+
       const response = await fetch(`/api/videos/${video.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(editData),
+        body: JSON.stringify({
+          title,
+          description,
+          script,
+        }),
       });
 
-      if (response.ok) {
-        const updatedVideo = await response.json();
-        setVideo(updatedVideo);
-        setIsEditing(false);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update video");
       }
-    } catch (error) {
-      console.error("Error updating video:", error);
+
+      const updatedVideo = await response.json();
+      setCurrentVideo(updatedVideo);
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Error updating video:", err);
+      setError(
+        err instanceof Error ? err.message : "An unknown error occurred"
+      );
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this video idea?")) {
+    if (
+      !confirm(
+        "Are you sure you want to delete this video? This action cannot be undone."
+      )
+    ) {
       return;
     }
 
@@ -142,116 +105,102 @@ export default function VideoDetailClient({
         method: "DELETE",
       });
 
-      if (response.ok) {
-        window.location.href = "/";
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete video");
       }
-    } catch (error) {
-      console.error("Error deleting video:", error);
+
+      router.push("/");
+    } catch (err) {
+      console.error("Error deleting video:", err);
+      setError(
+        err instanceof Error ? err.message : "An unknown error occurred"
+      );
     }
   };
 
-  const handleThumbnailUpload = async (file: File) => {
-    const formData = new FormData();
-    formData.append("thumbnail", file);
-
-    try {
-      const response = await fetch(`/api/videos/${video.id}/thumbnail`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (response.ok) {
-        const { thumbnailUrl } = await response.json();
-        setVideo((prev) => ({ ...prev, thumbnailUrl }));
-      }
-    } catch (error) {
-      console.error("Error uploading thumbnail:", error);
-    }
+  const handleTasksUpdated = (updatedTasks: ClientTask[]) => {
+    setCurrentVideo({
+      ...currentVideo,
+      tasks: updatedTasks,
+    });
   };
 
-  const tasksByPhase = video.tasks.reduce((acc, task) => {
+  const tasksByPhase = currentVideo.tasks.reduce((acc, task) => {
     if (!acc[task.phase]) {
       acc[task.phase] = [];
     }
     acc[task.phase].push(task);
     return acc;
-  }, {} as Record<string, Task[]>);
+  }, {} as Record<string, ClientTask[]>);
 
   return (
-    <div className="min-h-screen py-10">
-      <header>
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <Link
-                href="/"
-                className="mr-4 rounded-full p-2 hover:bg-white/10 text-white"
-                aria-label="Back to videos"
-              >
-                <ArrowLeftIcon className="h-5 w-5" />
-              </Link>
-              <h1 className="text-3xl font-bold leading-tight tracking-tight text-white">
-                {video.title}
-              </h1>
-            </div>
-            <div>
-              {isEditing ? (
-                <div className="space-x-4">
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="rounded-md bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/20"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    className="rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600"
-                  >
-                    Save Changes
-                  </button>
-                </div>
-              ) : (
-                <div className="space-x-4">
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600"
-                  >
-                    Edit Video
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-600"
-                  >
-                    Delete Video
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#111e19]">
       <main>
-        <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="px-4 py-8 sm:px-0">
-            {/* Video Details */}
-            <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="space-y-6">
-                <div className="rounded-lg bg-white/10 backdrop-blur-sm p-6">
-                  <h2 className="text-xl font-semibold leading-7 text-white">
-                    Details
-                  </h2>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="py-6">
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/"
+                  className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+                >
+                  <ArrowLeftIcon className="h-5 w-5" />
+                </Link>
+                <h1 className="text-3xl font-bold leading-tight tracking-tight text-white">
+                  {currentVideo.title}
+                </h1>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {isEditing ? (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      className="rounded-md bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/20"
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      className="rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? "Saving..." : "Save Changes"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="rounded-md bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/20"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      className="rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+              <div className="lg:col-span-2 space-y-8">
+                <div className="rounded-xl bg-[#1a2b24] p-6 shadow">
                   {isEditing ? (
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       <div>
                         <label className="block text-sm font-medium mb-2">
                           Title
                         </label>
                         <input
                           type="text"
-                          value={editData.title}
-                          onChange={(e) =>
-                            setEditData({ ...editData, title: e.target.value })
-                          }
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
                           className="block w-full rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] px-3 py-2.5"
                         />
                       </div>
@@ -261,31 +210,9 @@ export default function VideoDetailClient({
                           Description
                         </label>
                         <textarea
-                          value={editData.description}
-                          onChange={(e) =>
-                            setEditData({
-                              ...editData,
-                              description: e.target.value,
-                            })
-                          }
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
                           rows={4}
-                          className="block w-full rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] px-3 py-2.5"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-2">
-                          Planned Date
-                        </label>
-                        <input
-                          type="date"
-                          value={editData.plannedDate}
-                          onChange={(e) =>
-                            setEditData({
-                              ...editData,
-                              plannedDate: e.target.value,
-                            })
-                          }
                           className="block w-full rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] px-3 py-2.5"
                         />
                       </div>
@@ -295,202 +222,133 @@ export default function VideoDetailClient({
                           Script
                         </label>
                         <textarea
-                          value={editData.script}
-                          onChange={(e) =>
-                            setEditData({ ...editData, script: e.target.value })
-                          }
+                          value={script}
+                          onChange={(e) => setScript(e.target.value)}
                           rows={8}
                           className="block w-full rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] px-3 py-2.5 font-mono"
                           placeholder="Write your video script here..."
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium mb-2">
-                          Thumbnail
-                        </label>
-                        <div className="flex items-center gap-4">
-                          {video.thumbnailUrl && (
-                            <Image
-                              src={video.thumbnailUrl}
-                              alt={`Thumbnail for ${video.title}`}
-                              width={128}
-                              height={128}
-                              className="w-32 h-32 object-cover rounded-lg"
-                            />
-                          )}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleThumbnailUpload(file);
-                            }}
-                            className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#40f99b] file:text-[#111e19] hover:file:bg-[#40f99b]/90"
-                          />
-                        </div>
-                      </div>
-
                       <div className="flex justify-end gap-4">
                         <button
-                          type="button"
+                          onClick={() => setIsEditing(false)}
+                          className="rounded-md bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/20"
+                        >
+                          Cancel
+                        </button>
+                        <button
                           onClick={handleSave}
-                          className="rounded-md bg-[#40f99b] px-4 py-2.5 text-sm font-medium text-[#111e19] hover:bg-[#40f99b]/90 focus:outline-none focus:ring-2 focus:ring-[#40f99b] focus:ring-offset-2 focus:ring-offset-[#111e19]"
+                          className="rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600"
                         >
                           Save Changes
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <dl className="mt-6 space-y-6 text-sm">
-                      <div>
-                        <dt className="font-medium text-gray-200">
-                          Current Status
-                        </dt>
-                        <dd className="mt-1">
-                          <div className="mt-2">
+                    <dl className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <dt className="font-medium text-gray-200">Status</dt>
+                        <dd>
+                          <div className="flex items-center">
                             <span
                               className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium ${getStatusColorClasses(
-                                video.status
+                                currentVideo.status
                               )}`}
                             >
                               {(() => {
-                                const Icon = getStatusIcon(video.status);
+                                const Icon = getStatusIcon(currentVideo.status);
                                 return <Icon className="h-5 w-5" />;
                               })()}
-                              {video.status}
+                              {currentVideo.status}
                             </span>
                           </div>
                         </dd>
                       </div>
+
                       <div>
                         <dt className="font-medium text-gray-200">
                           Planned Date
                         </dt>
                         <dd className="mt-1 text-white">
                           {format(
-                            typeof video.plannedDate === "string"
-                              ? parseISO(video.plannedDate)
-                              : video.plannedDate,
+                            typeof currentVideo.plannedDate === "string"
+                              ? parseISO(currentVideo.plannedDate)
+                              : currentVideo.plannedDate,
                             "MMM d, yyyy"
                           )}
                         </dd>
                       </div>
+
                       <div>
                         <dt className="font-medium text-gray-200">
                           Description
                         </dt>
                         <dd className="mt-1 text-white whitespace-pre-wrap">
-                          {video.description || "No description"}
+                          {currentVideo.description || "No description"}
                         </dd>
                       </div>
-                      {video.script && (
+                      {currentVideo.script && (
                         <div>
                           <dt className="font-medium text-gray-200">Script</dt>
                           <dd className="mt-1 text-white whitespace-pre-wrap font-mono">
-                            {video.script}
+                            {currentVideo.script}
                           </dd>
                         </div>
                       )}
                     </dl>
                   )}
                 </div>
+              </div>
 
-                {/* Thumbnail Upload */}
-                <div className="rounded-lg bg-white/10 backdrop-blur-sm p-6">
-                  <h2 className="text-xl font-semibold leading-7 text-white mb-4">
+              <div className="space-y-8">
+                <div className="rounded-xl bg-[#1a2b24] p-6 shadow">
+                  <h2 className="text-lg font-medium text-white mb-4">
                     Thumbnail
                   </h2>
-                  {video.thumbnailUrl ? (
+                  {currentVideo.thumbnailUrl ? (
                     <div className="relative w-full h-48 mb-4">
                       <Image
-                        src={video.thumbnailUrl}
-                        alt={`Thumbnail for ${video.title}`}
+                        src={currentVideo.thumbnailUrl}
+                        alt={`Thumbnail for ${currentVideo.title}`}
                         fill
                         className="object-cover rounded-lg"
-                        sizes="(max-width: 768px) 100vw, 600px"
-                        priority
                       />
                     </div>
                   ) : (
-                    <div className="w-full h-48 bg-gray-200 rounded-lg mb-4 flex items-center justify-center">
-                      <p className="text-gray-500">No thumbnail available</p>
+                    <div className="flex items-center justify-center w-full h-48 bg-white/5 rounded-lg mb-4">
+                      <p className="text-gray-400 text-sm">No thumbnail</p>
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* Tasks */}
-              <div className="rounded-lg bg-white/10 backdrop-blur-sm p-6">
-                <h2 className="text-xl font-semibold leading-7 text-white mb-6">
-                  Production Tasks
-                </h2>
-                <div className="space-y-8">
-                  {Object.entries(tasksByPhase).map(([phase, tasks]) => (
-                    <div key={phase} className="space-y-4">
-                      <h3 className="text-lg font-medium text-white border-b border-white/10 pb-2">
-                        {phase.charAt(0) + phase.slice(1).toLowerCase()}
-                      </h3>
-                      <ul className="space-y-3">
-                        {tasks
-                          .sort((a, b) => a.order - b.order)
-                          .map((task) => (
-                            <li key={task.id} className="group space-y-2">
-                              <div className="flex items-center space-x-3">
-                                <button
-                                  onClick={() => handleTaskToggle(task.id)}
-                                  className={`flex h-5 w-5 items-center justify-center rounded border ${
-                                    task.isCompleted
-                                      ? "bg-indigo-500 border-transparent"
-                                      : "border-white/20 hover:border-white/40"
-                                  }`}
-                                >
-                                  {task.isCompleted && (
-                                    <CheckIcon className="h-3.5 w-3.5 text-white" />
-                                  )}
-                                </button>
-                                <span
-                                  className={`text-sm ${
-                                    task.isCompleted
-                                      ? "text-gray-400 line-through"
-                                      : "text-white group-hover:text-white"
-                                  }`}
-                                >
-                                  {task.title}
-                                </span>
-                              </div>
-                              {isEditing && (
-                                <div className="ml-8">
-                                  <textarea
-                                    placeholder="Add notes..."
-                                    value={task.notes || ""}
-                                    onChange={(e) =>
-                                      handleTaskNoteUpdate(
-                                        task.id,
-                                        e.target.value
-                                      )
-                                    }
-                                    className="w-full text-sm rounded-md bg-white/5 border-0 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-                                    rows={2}
-                                  />
-                                </div>
-                              )}
-                              {!isEditing && task.notes && (
-                                <div className="ml-8 text-sm text-gray-400">
-                                  {task.notes}
-                                </div>
-                              )}
-                            </li>
-                          ))}
-                      </ul>
-                    </div>
-                  ))}
+                <div className="rounded-xl bg-[#1a2b24] p-6 shadow">
+                  <h2 className="text-lg font-medium text-white mb-4">Tasks</h2>
+                  <div className="space-y-6">
+                    {Object.entries(tasksByPhase).map(([phase, tasks]) => (
+                      <div key={phase}>
+                        <h3 className="text-sm font-medium text-gray-200 mb-3">
+                          {phase.charAt(0) + phase.slice(1).toLowerCase()}
+                        </h3>
+                        <TaskList
+                          tasks={tasks}
+                          videoId={currentVideo.id}
+                          onTasksUpdated={handleTasksUpdated}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </main>
+      {error && (
+        <div className="mt-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

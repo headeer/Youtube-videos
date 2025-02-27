@@ -1,60 +1,45 @@
+import { VideoStatus } from "@prisma/client";
 import {
   PencilIcon,
-  DocumentTextIcon,
   VideoCameraIcon,
   FilmIcon,
-  PhotoIcon,
-  GlobeAltIcon,
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
+import { ComponentType } from "react";
 
-export type VideoStatus =
-  | "PLANNING"
-  | "SCRIPTING"
-  | "RECORDING"
-  | "EDITING"
-  | "PACKAGING"
-  | "DISTRIBUTION"
-  | "COMPLETED";
+// Re-export VideoStatus from Prisma
+export { VideoStatus };
 
-export function getStatusColorClasses(status: VideoStatus) {
+// Get the appropriate color classes for a status
+export function getStatusColorClasses(status: VideoStatus): string {
   switch (status) {
     case "PLANNING":
-      return "bg-blue-400/10 text-blue-400";
-    case "SCRIPTING":
-      return "bg-purple-400/10 text-purple-400";
+      return "bg-blue-100 text-blue-800";
     case "RECORDING":
-      return "bg-red-400/10 text-red-400";
+      return "bg-purple-100 text-purple-800";
     case "EDITING":
-      return "bg-orange-400/10 text-orange-400";
-    case "PACKAGING":
-      return "bg-yellow-400/10 text-yellow-400";
-    case "DISTRIBUTION":
-      return "bg-green-400/10 text-green-400";
-    case "COMPLETED":
-      return "bg-emerald-400/10 text-emerald-400";
+      return "bg-orange-100 text-orange-800";
+    case "PUBLISHED":
+      return "bg-green-100 text-green-800";
     default:
-      return "bg-gray-400/10 text-gray-400";
+      return "bg-gray-100 text-gray-800";
   }
 }
 
-export function getStatusIcon(status: VideoStatus) {
+// Get the appropriate icon component for a status
+export function getStatusIcon(
+  status: VideoStatus
+): ComponentType<{ className?: string }> {
   switch (status) {
     case "PLANNING":
       return PencilIcon;
-    case "SCRIPTING":
-      return DocumentTextIcon;
     case "RECORDING":
       return VideoCameraIcon;
     case "EDITING":
       return FilmIcon;
-    case "PACKAGING":
-      return PhotoIcon;
-    case "DISTRIBUTION":
-      return GlobeAltIcon;
-    case "COMPLETED":
+    case "PUBLISHED":
       return CheckCircleIcon;
     default:
-      return PencilIcon;
+      return CheckCircleIcon;
   }
 }
