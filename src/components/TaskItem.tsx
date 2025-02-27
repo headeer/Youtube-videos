@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { TaskPhase } from "@prisma/client";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, XCircleIcon } from "@heroicons/react/24/outline";
 
 // Define the client-side task interface
 interface ClientTask {
@@ -23,6 +23,8 @@ interface TaskItemProps {
 export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Local state to immediately reflect changes
+  const [isCompleted, setIsCompleted] = useState(task.isCompleted);
 
   const getPhaseColor = (phase: TaskPhase) => {
     switch (phase) {
@@ -48,8 +50,12 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
       setIsLoading(true);
       setError(null);
 
+      // Update local state immediately for better UX
+      const newCompletedState = !isCompleted;
+      setIsCompleted(newCompletedState);
+
       console.log(
-        `Updating task ${task.id}, setting isCompleted to ${!task.isCompleted}`
+        `Updating task ${task.id}, setting isCompleted to ${newCompletedState}`
       );
 
       const response = await fetch(`/api/tasks/${task.id}`, {
@@ -58,11 +64,13 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          isCompleted: !task.isCompleted,
+          isCompleted: newCompletedState,
         }),
       });
 
       if (!response.ok) {
+        // Revert local state if API call fails
+        setIsCompleted(!newCompletedState);
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to update task");
       }
@@ -89,25 +97,20 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
         <button
           onClick={handleToggleComplete}
           disabled={isLoading}
-          className={`flex-shrink-0 h-5 w-5 rounded-full border ${
-            task.isCompleted
+          className={`flex-shrink-0 h-6 w-6 rounded border ${
+            isCompleted
               ? "bg-green-500 border-green-500 text-white"
-              : "border-gray-300 bg-white"
+              : "border-gray-300 bg-white hover:border-green-500"
           } flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500`}
-          aria-label={
-            task.isCompleted ? "Mark as incomplete" : "Mark as complete"
-          }
+          aria-label={isCompleted ? "Mark as incomplete" : "Mark as complete"}
         >
-          {task.isCompleted && (
-            <CheckCircleIcon
-              className="h-4 w-4 text-white"
-              aria-hidden="true"
-            />
+          {isCompleted && (
+            <CheckIcon className="h-4 w-4 text-white" aria-hidden="true" />
           )}
         </button>
         <span
           className={`text-sm ${
-            task.isCompleted ? "line-through text-gray-500" : "text-gray-700"
+            isCompleted ? "line-through text-gray-500" : "text-gray-700"
           }`}
         >
           {task.title}

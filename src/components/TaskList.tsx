@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TaskPhase } from "@prisma/client";
 import TaskItem from "./TaskItem";
 
@@ -17,16 +17,16 @@ interface ClientTask {
 
 interface TaskListProps {
   tasks: ClientTask[];
-  videoId: string;
   onTasksUpdated?: (tasks: ClientTask[]) => void;
 }
 
-export default function TaskList({
-  tasks,
-  videoId,
-  onTasksUpdated,
-}: TaskListProps) {
+export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
   const [localTasks, setLocalTasks] = useState<ClientTask[]>(tasks);
+
+  // Update local tasks when props change
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
 
   const handleTaskUpdated = (updatedTask: ClientTask) => {
     const newTasks = localTasks.map((task) =>
@@ -40,15 +40,6 @@ export default function TaskList({
     }
   };
 
-  // Group tasks by phase
-  const tasksByPhase = localTasks.reduce((acc, task) => {
-    if (!acc[task.phase]) {
-      acc[task.phase] = [];
-    }
-    acc[task.phase].push(task);
-    return acc;
-  }, {} as Record<string, ClientTask[]>);
-
   // Sort phases in the correct order
   const phaseOrder: TaskPhase[] = [
     "PLANNING",
@@ -60,20 +51,18 @@ export default function TaskList({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {phaseOrder.map((phase) => {
-        const phaseTasks = tasksByPhase[phase] || [];
+        // Filter tasks for this phase
+        const phaseTasks = localTasks.filter((task) => task.phase === phase);
         if (phaseTasks.length === 0) return null;
 
         return (
-          <div
-            key={phase}
-            className="bg-white rounded-lg shadow overflow-hidden"
-          >
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700">{phase}</h3>
+          <div key={phase} className="bg-white/5 rounded-lg overflow-hidden">
+            <div className="px-4 py-2 border-b border-white/10">
+              <h3 className="text-sm font-medium text-white">{phase}</h3>
             </div>
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-white/10">
               {phaseTasks
                 .sort((a, b) => a.order - b.order)
                 .map((task) => (

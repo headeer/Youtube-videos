@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeftIcon, CheckIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { format, parseISO } from "date-fns";
 import { VideoStatus, TaskPhase } from "@prisma/client";
 import { getStatusColorClasses, getStatusIcon } from "@/utils/statusColors";
@@ -20,11 +20,6 @@ interface ClientTask {
   videoIdeaId: string;
   createdAt: Date;
   updatedAt: Date;
-}
-
-interface VideoMetadata {
-  tags: string[];
-  category: string;
 }
 
 interface VideoIdea {
@@ -125,14 +120,6 @@ export default function VideoDetailClient({ video }: VideoDetailClientProps) {
       tasks: updatedTasks,
     });
   };
-
-  const tasksByPhase = currentVideo.tasks.reduce((acc, task) => {
-    if (!acc[task.phase]) {
-      acc[task.phase] = [];
-    }
-    acc[task.phase].push(task);
-    return acc;
-  }, {} as Record<string, ClientTask[]>);
 
   return (
     <div className="min-h-screen bg-[#111e19]">
@@ -325,14 +312,21 @@ export default function VideoDetailClient({ video }: VideoDetailClientProps) {
                 <div className="rounded-xl bg-[#1a2b24] p-6 shadow">
                   <h2 className="text-lg font-medium text-white mb-4">Tasks</h2>
                   <div className="space-y-6">
-                    {Object.entries(tasksByPhase).map(([phase, tasks]) => (
+                    {Object.entries(
+                      currentVideo.tasks.reduce((acc, task) => {
+                        if (!acc[task.phase]) {
+                          acc[task.phase] = [];
+                        }
+                        acc[task.phase].push(task);
+                        return acc;
+                      }, {} as Record<string, ClientTask[]>)
+                    ).map(([phase, tasks]) => (
                       <div key={phase}>
                         <h3 className="text-sm font-medium text-gray-200 mb-3">
                           {phase.charAt(0) + phase.slice(1).toLowerCase()}
                         </h3>
                         <TaskList
                           tasks={tasks}
-                          videoId={currentVideo.id}
                           onTasksUpdated={handleTasksUpdated}
                         />
                       </div>
