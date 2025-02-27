@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { VideoStatus, TaskPhase } from "@prisma/client";
+import { VideoStatus, TaskPhase, Prisma } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -33,7 +33,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, description, plannedDate } = body;
+    const { title, description, plannedDate, script, metadata } = body;
 
     if (!title || !plannedDate) {
       return NextResponse.json(
@@ -46,28 +46,29 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         description: description || null,
+        script: script || null,
+        // Using a type-safe approach for SQLite
+        metadata: metadata
+          ? (JSON.stringify(metadata) as unknown as Prisma.JsonValue)
+          : null,
         plannedDate: new Date(plannedDate),
         status: VideoStatus.PLANNING,
         isUploaded: false,
         tasks: {
           create: [
-            { title: "Research topic", phase: TaskPhase.IDEATION, order: 0 },
+            { title: "Research Topic", phase: TaskPhase.PLANNING, order: 0 },
+            { title: "Create Outline", phase: TaskPhase.PLANNING, order: 1 },
+            { title: "Write Script", phase: TaskPhase.PLANNING, order: 2 },
+            { title: "Record Video", phase: TaskPhase.RECORDING, order: 3 },
+            { title: "Edit Video", phase: TaskPhase.EDITING, order: 4 },
+            { title: "Create Thumbnail", phase: TaskPhase.THUMBNAIL, order: 5 },
             {
-              title: "Outline video structure",
-              phase: TaskPhase.PLANNING,
-              order: 1,
+              title: "Add Description & Tags",
+              phase: TaskPhase.METADATA,
+              order: 6,
             },
             {
-              title: "Write script draft",
-              phase: TaskPhase.SCRIPTING,
-              order: 2,
-            },
-            { title: "Record footage", phase: TaskPhase.RECORDING, order: 3 },
-            { title: "Edit video", phase: TaskPhase.EDITING, order: 4 },
-            { title: "Create thumbnail", phase: TaskPhase.THUMBNAIL, order: 5 },
-            { title: "Add metadata", phase: TaskPhase.METADATA, order: 6 },
-            {
-              title: "Upload and schedule",
+              title: "Schedule Upload",
               phase: TaskPhase.DISTRIBUTION,
               order: 7,
             },
@@ -83,14 +84,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(video);
+    // Parse the metadata back to JSON for the response if needed
+    const responseVideo = {
+      ...video,
+      metadata:
+        typeof video.metadata === "string"
+          ? JSON.parse(video.metadata)
+          : video.metadata,
+    };
+
+    return NextResponse.json(responseVideo);
   } catch (error) {
-    console.error("Database error:", error);
+    console.error("Error creating video:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      {
-        error: "Failed to create video",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { error: "Failed to create video", details: errorMessage },
       { status: 500 }
     );
   }

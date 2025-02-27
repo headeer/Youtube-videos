@@ -21,12 +21,22 @@ export type VideoStatus =
   | "DISTRIBUTION"
   | "COMPLETED";
 
+interface VideoMetadata {
+  tags: string[];
+  category: string;
+}
+
 interface VideoIdea {
   id: string;
   title: string;
+  description: string | null;
+  script: string | null;
+  metadata: VideoMetadata | null;
+  thumbnailUrl: string | null;
   status: VideoStatus;
-  plannedDate: Date;
   isUploaded: boolean;
+  plannedDate: Date;
+  finishDate: Date | null;
 }
 
 interface Excuse {
@@ -36,9 +46,13 @@ interface Excuse {
   updatedAt: Date;
 }
 
-export default function HomeClient() {
-  const [videos, setVideos] = useState<VideoIdea[]>([]);
+export default function HomeClient({
+  initialVideos,
+}: {
+  initialVideos: VideoIdea[];
+}) {
   const [isNewVideoModalOpen, setIsNewVideoModalOpen] = useState(false);
+  const [videos, setVideos] = useState<VideoIdea[]>(initialVideos || []);
   const [excuses, setExcuses] = useState<Excuse[]>([]);
   const [newExcuse, setNewExcuse] = useState("");
   const [filters, setFilters] = useState({
@@ -48,9 +62,30 @@ export default function HomeClient() {
     dateTo: "",
   });
   const [isExcuseModalOpen, setIsExcuseModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load videos from API
+  const loadVideos = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/videos");
+      if (!response.ok) {
+        throw new Error(`Failed to load videos: ${response.status}`);
+      }
+      const data = await response.json();
+      setVideos(data);
+    } catch (err) {
+      console.error("Error loading videos:", err);
+      setError(err instanceof Error ? err.message : "Failed to load videos");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setVideos([]);
+    loadVideos();
   }, []);
 
   const loadExcuses = async () => {
@@ -151,6 +186,10 @@ export default function HomeClient() {
     setVideos((currentVideos) =>
       currentVideos.filter((video) => video.id !== deletedVideoId)
     );
+  };
+
+  const handleVideoCreated = (newVideo: VideoIdea) => {
+    setVideos((prev) => [newVideo, ...prev]);
   };
 
   return (
@@ -271,102 +310,131 @@ export default function HomeClient() {
             {/* Table */}
             <div className="mt-4">
               <div className="glass-effect rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-white/10">
-                  <thead>
-                    <tr>
-                      <th
-                        scope="col"
-                        className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white"
-                      >
-                        Title
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-white"
-                      >
-                        Status
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-white"
-                      >
-                        Planned Date
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-white"
-                      >
-                        Upload Status
-                      </th>
-                      <th scope="col" className="relative py-3.5 pl-3 pr-4">
-                        <span className="sr-only">Edit</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {filteredVideos.map((video) => (
-                      <tr
-                        key={video.id}
-                        className="hover:bg-white/[0.025] transition-colors group"
-                      >
-                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white">
-                          {video.title}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm">
-                          <span
-                            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${getStatusColorClasses(
-                              video.status
-                            )}`}
-                          >
-                            {(() => {
-                              const Icon = getStatusIcon(video.status);
-                              return <Icon className="h-4 w-4" />;
-                            })()}
-                            {video.status}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-white">
-                          {video.plannedDate
-                            ? format(new Date(video.plannedDate), "MMM d, yyyy")
-                            : "No date set"}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-white">
-                          {video.isUploaded ? "Uploaded" : "Not Uploaded"}
-                        </td>
-                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium">
-                          <div className="flex items-center justify-end gap-4">
-                            <Link
-                              href={`/videos/${video.id}`}
-                              className="text-indigo-400 hover:text-indigo-300"
-                            >
-                              Edit
-                            </Link>
-                            <button
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    "Are you sure you want to delete this video?"
-                                  )
-                                ) {
-                                  fetch(`/api/videos/${video.id}`, {
-                                    method: "DELETE",
-                                  }).then((response) => {
-                                    if (response.ok) {
-                                      handleVideoDeleted(video.id);
-                                    }
-                                  });
-                                }
-                              }}
-                              className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <TrashIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        </td>
+                {isLoading ? (
+                  <div className="p-8 text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#40f99b] mx-auto"></div>
+                    <p className="mt-4 text-white">Loading videos...</p>
+                  </div>
+                ) : error ? (
+                  <div className="p-8 text-center">
+                    <div className="text-red-500 mb-2">
+                      Error loading videos
+                    </div>
+                    <p className="text-white">{error}</p>
+                    <button
+                      onClick={loadVideos}
+                      className="mt-4 px-4 py-2 bg-[#40f99b] text-[#111e19] rounded-md hover:bg-[#40f99b]/90"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                ) : filteredVideos.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className="text-white">
+                      No videos found. Create your first video idea!
+                    </p>
+                  </div>
+                ) : (
+                  <table className="min-w-full divide-y divide-white/10">
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white"
+                        >
+                          Title
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-3 py-3.5 text-left text-sm font-semibold text-white"
+                        >
+                          Status
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-3 py-3.5 text-left text-sm font-semibold text-white"
+                        >
+                          Planned Date
+                        </th>
+                        <th
+                          scope="col"
+                          className="px-3 py-3.5 text-left text-sm font-semibold text-white"
+                        >
+                          Upload Status
+                        </th>
+                        <th scope="col" className="relative py-3.5 pl-3 pr-4">
+                          <span className="sr-only">Edit</span>
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {filteredVideos.map((video) => (
+                        <tr
+                          key={video.id}
+                          className="hover:bg-white/[0.025] transition-colors group"
+                        >
+                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white">
+                            {video.title}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${getStatusColorClasses(
+                                video.status
+                              )}`}
+                            >
+                              {(() => {
+                                const Icon = getStatusIcon(video.status);
+                                return <Icon className="h-4 w-4" />;
+                              })()}
+                              {video.status}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-white">
+                            {video.plannedDate
+                              ? format(
+                                  new Date(video.plannedDate),
+                                  "MMM d, yyyy"
+                                )
+                              : "No date set"}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-white">
+                            {video.isUploaded ? "Uploaded" : "Not Uploaded"}
+                          </td>
+                          <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium">
+                            <div className="flex items-center justify-end gap-4">
+                              <Link
+                                href={`/videos/${video.id}`}
+                                className="text-indigo-400 hover:text-indigo-300"
+                              >
+                                Edit
+                              </Link>
+                              <button
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      "Are you sure you want to delete this video?"
+                                    )
+                                  ) {
+                                    fetch(`/api/videos/${video.id}`, {
+                                      method: "DELETE",
+                                    }).then((response) => {
+                                      if (response.ok) {
+                                        handleVideoDeleted(video.id);
+                                      }
+                                    });
+                                  }
+                                }}
+                                className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <TrashIcon className="h-5 w-5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </div>
@@ -493,6 +561,7 @@ export default function HomeClient() {
         <NewVideoModal
           isOpen={isNewVideoModalOpen}
           onClose={() => setIsNewVideoModalOpen(false)}
+          onVideoCreated={handleVideoCreated}
         />
       </div>
     </div>

@@ -8,10 +8,30 @@ declare global {
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.
-const globalForPrisma = global as unknown as {
-  prisma: PrismaClient | undefined;
-};
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-export const prisma = globalForPrisma.prisma || new PrismaClient();
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: ["query", "error", "warn"],
+    errorFormat: "pretty",
+  });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
+
+// Ensure the connection is established
+prisma
+  .$connect()
+  .then(() => {
+    console.log("Database connection established successfully");
+  })
+  .catch((e) => {
+    console.error("Failed to connect to the database:", e);
+  });
+
+// Handle graceful shutdown
+process.on("beforeExit", async () => {
+  await prisma.$disconnect();
+});
