@@ -65,6 +65,8 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
         },
         body: JSON.stringify({
           isCompleted: newCompletedState,
+          // Remove any fields that might not exist in the database
+          // plannedDate: undefined
         }),
       });
 
@@ -86,22 +88,24 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred"
       );
+      // Make sure to revert the local state if there was an error
+      setIsCompleted(task.isCompleted);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-between p-3 border-b border-gray-200 last:border-b-0">
+    <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
       <div className="flex items-center space-x-3">
         <button
           onClick={handleToggleComplete}
           disabled={isLoading}
-          className={`flex-shrink-0 h-6 w-6 rounded border ${
+          className={`flex-shrink-0 h-6 w-6 rounded ${
             isCompleted
               ? "bg-green-500 border-green-500 text-white"
-              : "border-gray-300 bg-white hover:border-green-500"
-          } flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500`}
+              : "border-2 border-gray-300 dark:border-gray-500 bg-transparent hover:border-green-500"
+          } flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200`}
           aria-label={isCompleted ? "Mark as incomplete" : "Mark as complete"}
         >
           {isCompleted && (
@@ -110,7 +114,9 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
         </button>
         <span
           className={`text-sm ${
-            isCompleted ? "line-through text-gray-500" : "text-gray-700"
+            isCompleted
+              ? "line-through text-gray-500"
+              : "text-gray-700 dark:text-gray-200"
           }`}
         >
           {task.title}

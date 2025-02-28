@@ -50,6 +50,14 @@ export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
     "DISTRIBUTION",
   ];
 
+  // Calculate completion stats
+  const getCompletionStats = (tasks: ClientTask[]) => {
+    const total = tasks.length;
+    const completed = tasks.filter((task) => task.isCompleted).length;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, percentage };
+  };
+
   return (
     <div className="space-y-4">
       {phaseOrder.map((phase) => {
@@ -57,10 +65,19 @@ export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
         const phaseTasks = localTasks.filter((task) => task.phase === phase);
         if (phaseTasks.length === 0) return null;
 
+        const { total, completed, percentage } = getCompletionStats(phaseTasks);
+
         return (
           <div key={phase} className="bg-white/5 rounded-lg overflow-hidden">
-            <div className="px-4 py-2 border-b border-white/10">
+            <div className="px-4 py-2 border-b border-white/10 flex justify-between items-center">
               <h3 className="text-sm font-medium text-white">{phase}</h3>
+              <div className="text-xs text-gray-300">
+                <span className="font-medium">
+                  {completed}/{total}
+                </span>{" "}
+                tasks completed
+                <span className="ml-2 text-xs">({percentage}%)</span>
+              </div>
             </div>
             <div className="divide-y divide-white/10">
               {phaseTasks
