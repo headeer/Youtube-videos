@@ -15,35 +15,6 @@ const prismaClientSingleton = () => {
         url: process.env.DATABASE_URL,
       },
     },
-    // Add connection pooling configuration
-    connection: {
-      pool: {
-        min: 2,
-        max: 10,
-        idleTimeoutMillis: 30000,
-        acquireTimeoutMillis: 60000,
-      },
-    },
-    // Add retry configuration
-    __internal: {
-      engine: {
-        retry: {
-          maxRetries: 3,
-          initialDelay: 1000,
-          maxDelay: 5000,
-          retryIf: (error: any) => {
-            // Retry on connection errors and deadlocks
-            return (
-              error.code === "P1001" ||
-              error.code === "P1002" ||
-              error.code === "40P01" ||
-              error.message?.includes("Connection reset by peer") ||
-              error.message?.includes("SSL connection")
-            );
-          },
-        },
-      },
-    },
   });
 };
 
@@ -85,6 +56,16 @@ connectWithRetry().catch((e) => {
 });
 
 // Handle graceful shutdown
-process.on("beforeExit", async () => {
-  await prisma.$disconnect();
-});
+const handleShutdown = async () => {
+  try {
+    await prisma.$disconnect();
+    console.log("Database connection closed successfully");
+  } catch (e) {
+    console.error("Error during database disconnection:", e);
+    process.exit(1);
+  }
+};
+
+process.on("beforeExit", handleShutdown);
+process.on("SIGINT", handleShutdown);
+process.on("SIGTERM", handleShutdown);
