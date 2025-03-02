@@ -2,13 +2,21 @@ import { useState, useEffect, useCallback } from "react";
 import { TaskPhase } from "@prisma/client";
 import TaskItem from "./TaskItem";
 import { ClientTask } from "@/types";
+import HelpModal from "./HelpModal";
+import { HELP_CONTENT } from "@/utils/helpContent";
+import { TasksSkeleton } from "./Skeleton";
 
 interface TaskListProps {
   tasks: ClientTask[];
   onTasksUpdated?: (tasks: ClientTask[]) => void;
+  isLoading?: boolean;
 }
 
-export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
+export default function TaskList({
+  tasks,
+  onTasksUpdated,
+  isLoading,
+}: TaskListProps) {
   const [localTasks, setLocalTasks] = useState<ClientTask[]>(tasks);
 
   // Update local tasks when props change
@@ -48,6 +56,38 @@ export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
     return { total, completed, percentage };
   };
 
+  const getPhaseHelp = (
+    phase: TaskPhase
+  ): { title: string; content: string } | null => {
+    switch (phase) {
+      case "PLANNING":
+        return {
+          title: "Initial Video Idea Guidelines",
+          content: HELP_CONTENT.INITIAL_VIDEO_IDEA,
+        };
+      case "RECORDING":
+        return {
+          title: "Recording Best Practices",
+          content: HELP_CONTENT.RECORDING,
+        };
+      case "EDITING":
+        return {
+          title: "Editing Guidelines",
+          content: HELP_CONTENT.EDITING,
+        };
+      case "THUMBNAIL":
+      case "METADATA":
+      case "DISTRIBUTION":
+        return null;
+      default:
+        return null;
+    }
+  };
+
+  if (isLoading) {
+    return <TasksSkeleton />;
+  }
+
   return (
     <div className="space-y-4">
       {phaseOrder.map((phase) => {
@@ -55,17 +95,30 @@ export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
         if (phaseTasks.length === 0) return null;
 
         const { total, completed, percentage } = getCompletionStats(phaseTasks);
+        const helpContent = getPhaseHelp(phase);
 
         return (
           <div key={phase} className="bg-white/5 rounded-lg overflow-hidden">
-            <div className="px-4 py-2 border-b border-white/10 flex justify-between items-center">
-              <h3 className="text-sm font-medium text-white">{phase}</h3>
-              <div className="text-xs text-gray-300">
-                <span className="font-medium">
-                  {completed}/{total}
-                </span>{" "}
-                tasks completed
-                <span className="ml-2 text-xs">({percentage}%)</span>
+            <div className="px-4 py-2 border-b border-white/10">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-white">{phase}</h3>
+                  {helpContent && (
+                    <div className="relative z-10">
+                      <HelpModal
+                        title={helpContent.title}
+                        content={helpContent.content}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="text-xs text-gray-300">
+                  <span className="font-medium">
+                    {completed}/{total}
+                  </span>{" "}
+                  tasks completed
+                  <span className="ml-2 text-xs">({percentage}%)</span>
+                </div>
               </div>
             </div>
             <div className="divide-y divide-white/10">

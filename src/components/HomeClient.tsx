@@ -11,15 +11,9 @@ import {
 } from "@heroicons/react/24/outline";
 import NewVideoModal from "./NewVideoModal";
 import { getStatusColorClasses, getStatusIcon } from "@/utils/statusColors";
+import { VideoStatus as PrismaVideoStatus } from "@prisma/client";
 
-export type VideoStatus =
-  | "PLANNING"
-  | "SCRIPTING"
-  | "RECORDING"
-  | "EDITING"
-  | "PACKAGING"
-  | "DISTRIBUTION"
-  | "COMPLETED";
+export type VideoStatus = PrismaVideoStatus;
 
 interface VideoMetadata {
   tags: string[];
@@ -44,6 +38,13 @@ interface Excuse {
   text: string;
   createdAt: Date;
   updatedAt: Date;
+  uses: Array<{
+    id: string;
+    videoIdea: {
+      id: string;
+      title: string;
+    };
+  }>;
 }
 
 export default function HomeClient({
@@ -64,6 +65,7 @@ export default function HomeClient({
   const [isExcuseModalOpen, setIsExcuseModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingExcuses, setIsLoadingExcuses] = useState(false);
 
   // Load videos from API
   const loadVideos = async () => {
@@ -84,27 +86,27 @@ export default function HomeClient({
     }
   };
 
-  useEffect(() => {
-    loadVideos();
-  }, []);
-
+  // Load excuses from API
   const loadExcuses = async () => {
+    setIsLoadingExcuses(true);
     try {
-      const response = await fetch("/api/excuses");
+      const response = await fetch("/api/excuses?include=uses");
       if (response.ok) {
         const data = await response.json();
         setExcuses(data);
       }
     } catch (error) {
       console.error("Error loading excuses:", error);
+    } finally {
+      setIsLoadingExcuses(false);
     }
   };
 
+  // Load both videos and excuses on initial mount
   useEffect(() => {
-    if (isExcuseModalOpen) {
-      loadExcuses();
-    }
-  }, [isExcuseModalOpen]);
+    loadVideos();
+    loadExcuses();
+  }, []);
 
   const filteredVideos = videos.filter((video) => {
     if (filters.status && video.status !== filters.status) return false;
@@ -151,34 +153,10 @@ export default function HomeClient({
           },
         ]);
         setNewExcuse("");
+        setIsExcuseModalOpen(false); // Close the modal after successful addition
       }
     } catch (error) {
       console.error("Error adding excuse:", error);
-    }
-  };
-
-  const handleUseExcuse = async (excuseId: string, videoId: string) => {
-    try {
-      const response = await fetch("/api/excuses/use", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ excuseId, videoId }),
-      });
-
-      if (response.ok) {
-        // Update the excuse count in the UI
-        setExcuses(
-          excuses.map((excuse) =>
-            excuse.id === excuseId
-              ? { ...excuse, updatedAt: new Date() }
-              : excuse
-          )
-        );
-      }
-    } catch (error) {
-      console.error("Error using excuse:", error);
     }
   };
 
@@ -217,9 +195,7 @@ export default function HomeClient({
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Videos Section */}
           <div className="lg:col-span-2">
             <div className="glass-effect rounded-lg overflow-hidden">
               <div className="flex items-center gap-2 p-4 border-b border-white/10">
@@ -306,13 +282,12 @@ export default function HomeClient({
               </div>
             </div>
 
-            {/* Table */}
+            {/* Videos Table */}
             <div className="mt-4">
               <div className="glass-effect rounded-lg overflow-hidden">
                 {isLoading ? (
-                  <div className="p-8 text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#40f99b] mx-auto"></div>
-                    <p className="mt-4 text-white">Loading videos...</p>
+                  <div className="flex items-center justify-center p-12">
+                    <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
                   </div>
                 ) : error ? (
                   <div className="p-8 text-center">
@@ -337,32 +312,20 @@ export default function HomeClient({
                   <table className="min-w-full divide-y divide-white/10">
                     <thead>
                       <tr>
-                        <th
-                          scope="col"
-                          className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white"
-                        >
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Title
                         </th>
-                        <th
-                          scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-white"
-                        >
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Status
                         </th>
-                        <th
-                          scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-white"
-                        >
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Planned Date
                         </th>
-                        <th
-                          scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-white"
-                        >
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Upload Status
                         </th>
-                        <th scope="col" className="relative py-3.5 pl-3 pr-4">
-                          <span className="sr-only">Edit</span>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
                         </th>
                       </tr>
                     </thead>
@@ -372,8 +335,15 @@ export default function HomeClient({
                           key={video.id}
                           className="hover:bg-white/[0.025] transition-colors group"
                         >
-                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white">
-                            {video.title}
+                          <td className="py-4 pl-4 pr-3 text-sm">
+                            <div className="flex items-center">
+                              <p
+                                className="font-medium text-white max-w-[300px] truncate"
+                                title={video.title}
+                              >
+                                {video.title}
+                              </p>
+                            </div>
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm">
                             <span
@@ -454,54 +424,117 @@ export default function HomeClient({
                   Add Excuse
                 </button>
               </div>
-              <div className="p-4 space-y-2">
-                {excuses.map((excuse) => (
-                  <div
-                    key={excuse.id}
-                    className="flex items-center justify-between glass-effect rounded-md p-3 hover:bg-white/10 transition-colors group"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center justify-center bg-[#40f99b]/10 text-[#40f99b] rounded-full w-8 h-8 font-medium">
-                        {excuse.text}
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() =>
-                          handleUseExcuse(excuse.id, videos[0]?.id)
-                        }
-                        className="rounded-md bg-indigo-500 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-600"
-                      >
-                        Use
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Are you sure you want to delete this excuse?"
-                            )
-                          ) {
-                            fetch(`/api/excuses/${excuse.id}`, {
-                              method: "DELETE",
-                            }).then((response) => {
-                              if (response.ok) {
-                                handleVideoDeleted(excuse.id);
-                              }
-                            });
-                          }
-                        }}
-                        className="rounded-md bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-600"
-                      >
-                        Delete
-                      </button>
-                    </div>
+              <div className="p-4">
+                {isLoadingExcuses ? (
+                  <div className="flex items-center justify-center p-12">
+                    <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
                   </div>
-                ))}
-                {excuses.length === 0 && (
-                  <p className="text-[#d9d9d9] text-sm text-center py-4">
-                    No excuses added yet. Add one to track why you&apos;re not
-                    recording!
-                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {excuses.map((excuse) => (
+                      <div
+                        key={excuse.id}
+                        className="glass-effect rounded-md p-3 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <p
+                                className="text-sm text-white break-words"
+                                style={{ wordBreak: "break-word" }}
+                              >
+                                {excuse.text}
+                              </p>
+                              <div className="mt-1 text-xs text-[#40f99b]">
+                                Used {excuse.uses?.length || 0} times
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={async () => {
+                                  if (!videos.length) {
+                                    alert(
+                                      "No videos available to use this excuse with!"
+                                    );
+                                    return;
+                                  }
+                                  try {
+                                    const response = await fetch(
+                                      "/api/excuses/use",
+                                      {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({
+                                          excuseId: excuse.id,
+                                          videoId: videos[0].id,
+                                        }),
+                                      }
+                                    );
+
+                                    const data = await response.json();
+
+                                    if (!response.ok) {
+                                      throw new Error(
+                                        data.error || "Failed to use excuse"
+                                      );
+                                    }
+
+                                    setExcuses((prevExcuses) =>
+                                      prevExcuses.map((e) =>
+                                        e.id === excuse.id ? data : e
+                                      )
+                                    );
+                                  } catch (error) {
+                                    console.error("Error using excuse:", error);
+                                    alert(
+                                      error instanceof Error
+                                        ? error.message
+                                        : "Failed to use excuse. Please try again."
+                                    );
+                                  }
+                                }}
+                                className="rounded-md bg-indigo-500 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-600"
+                              >
+                                Use
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      "Are you sure you want to delete this excuse?"
+                                    )
+                                  ) {
+                                    fetch(`/api/excuses/${excuse.id}`, {
+                                      method: "DELETE",
+                                    }).then((response) => {
+                                      if (response.ok) {
+                                        loadExcuses();
+                                      }
+                                    });
+                                  }
+                                }}
+                                className="rounded-md bg-red-500 px-2 py-1 text-xs font-medium text-white hover:bg-red-600"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Added{" "}
+                            {format(new Date(excuse.createdAt), "MMM d, yyyy")}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {excuses.length === 0 && (
+                      <p className="text-[#d9d9d9] text-sm text-center py-4">
+                        No excuses added yet. Add one to track why you&apos;re
+                        not recording!
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -515,40 +548,60 @@ export default function HomeClient({
               <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                 <div className="relative transform overflow-hidden rounded-lg glass-effect px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
                   <div>
-                    <h3 className="text-lg font-medium leading-6 mb-4">
-                      Add New Excuse
-                    </h3>
-                    <div className="mt-2">
-                      <div className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={newExcuse}
-                          onChange={(e) => setNewExcuse(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleAddExcuse();
-                            }
-                          }}
-                          placeholder="Why aren't you recording today?"
-                          className="flex-1 rounded-md bg-[#111e19]/50 border-0 shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] py-2.5 px-3"
-                        />
-                        <button
-                          onClick={handleAddExcuse}
-                          className="rounded-md bg-[#40f99b] px-4 py-2.5 text-sm font-medium text-[#111e19] shadow-sm hover:bg-[#40f99b]/90 focus:outline-none focus:ring-2 focus:ring-[#40f99b] focus:ring-offset-2 focus:ring-offset-[#111e19]"
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-medium leading-6">
+                        Add New Excuse
+                      </h3>
+                      <button
+                        onClick={() => setIsExcuseModalOpen(false)}
+                        className="text-gray-400 hover:text-gray-300"
+                      >
+                        <span className="sr-only">Close</span>
+                        <svg
+                          className="h-6 w-6"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
                         >
-                          Add
-                        </button>
-                      </div>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="mt-2">
+                      <textarea
+                        value={newExcuse}
+                        onChange={(e) => setNewExcuse(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleAddExcuse();
+                          }
+                        }}
+                        placeholder="Why aren't you recording today?"
+                        rows={3}
+                        className="w-full rounded-md bg-[#111e19]/50 border-0 shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-[#40f99b] py-2.5 px-3 text-white resize-none"
+                      />
                     </div>
                   </div>
-                  <div className="mt-5 sm:mt-6">
+                  <div className="mt-5 flex justify-end gap-3">
                     <button
                       type="button"
-                      className="inline-flex w-full justify-center rounded-md bg-[#111e19]/50 px-3 py-2 text-sm font-medium shadow-sm hover:bg-[#111e19]/70"
+                      className="inline-flex justify-center rounded-md bg-[#111e19]/50 px-3 py-2 text-sm font-medium shadow-sm hover:bg-[#111e19]/70"
                       onClick={() => setIsExcuseModalOpen(false)}
                     >
-                      Close
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddExcuse}
+                      disabled={!newExcuse.trim()}
+                      className="rounded-md bg-[#40f99b] px-4 py-2 text-sm font-medium text-[#111e19] shadow-sm hover:bg-[#40f99b]/90 focus:outline-none focus:ring-2 focus:ring-[#40f99b] focus:ring-offset-2 focus:ring-offset-[#111e19] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add Excuse
                     </button>
                   </div>
                 </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const excuses = await prisma.excuse.findMany({
       include: {
@@ -32,16 +32,19 @@ export async function POST(request: Request) {
     const { text } = body;
 
     if (!text) {
-      return NextResponse.json(
-        { error: "Excuse text is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Text is required" }, { status: 400 });
     }
 
     const excuse = await prisma.excuse.create({
-      data: { text },
+      data: {
+        text,
+      },
       include: {
-        uses: true,
+        uses: {
+          include: {
+            videoIdea: true,
+          },
+        },
       },
     });
 
