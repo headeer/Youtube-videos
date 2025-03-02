@@ -10,9 +10,16 @@ interface TaskItemProps {
 
 export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [optimisticCompleted, setOptimisticCompleted] = useState(
+    task.completed
+  );
 
   const handleToggleComplete = async () => {
     if (isLoading) return;
+
+    // Optimistic update
+    const newCompletedState = !optimisticCompleted;
+    setOptimisticCompleted(newCompletedState);
     setIsLoading(true);
 
     try {
@@ -22,11 +29,13 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          completed: !task.completed,
+          completed: newCompletedState,
         }),
       });
 
       if (!response.ok) {
+        // Revert optimistic update on error
+        setOptimisticCompleted(!newCompletedState);
         throw new Error("Failed to update task");
       }
 
@@ -44,19 +53,19 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
   const getPhaseColor = (phase: TaskPhase) => {
     switch (phase) {
       case "PLANNING":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-500/10 text-blue-500";
       case "RECORDING":
-        return "bg-purple-100 text-purple-800";
+        return "bg-purple-500/10 text-purple-500";
       case "EDITING":
-        return "bg-orange-100 text-orange-800";
+        return "bg-orange-500/10 text-orange-500";
       case "THUMBNAIL":
-        return "bg-pink-100 text-pink-800";
+        return "bg-pink-500/10 text-pink-500";
       case "METADATA":
-        return "bg-green-100 text-green-800";
+        return "bg-green-500/10 text-green-500";
       case "DISTRIBUTION":
-        return "bg-indigo-100 text-indigo-800";
+        return "bg-indigo-500/10 text-indigo-500";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-500/10 text-gray-500";
     }
   };
 
@@ -67,15 +76,15 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
           onClick={handleToggleComplete}
           disabled={isLoading}
           className={`flex-shrink-0 h-6 w-6 rounded ${
-            task.completed
+            optimisticCompleted
               ? "bg-green-500 border-green-500 text-white"
               : "border-2 border-gray-300 dark:border-gray-500 bg-transparent hover:border-green-500"
           } flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200`}
           aria-label={
-            task.completed ? "Mark as incomplete" : "Mark as complete"
+            optimisticCompleted ? "Mark as incomplete" : "Mark as complete"
           }
         >
-          {task.completed && (
+          {optimisticCompleted && (
             <CheckIcon className="h-4 w-4 text-white" aria-hidden="true" />
           )}
           {isLoading && (
@@ -84,7 +93,7 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
         </button>
         <span
           className={`text-sm ${
-            task.completed
+            optimisticCompleted
               ? "line-through text-gray-500"
               : "text-gray-700 dark:text-gray-200"
           }`}

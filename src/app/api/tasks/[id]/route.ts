@@ -5,24 +5,15 @@ import { VideoStatus, TaskPhase } from "@prisma/client";
 const determineVideoStatus = (
   tasks: { phase: TaskPhase; completed: boolean }[]
 ) => {
-  const tasksByPhase = tasks.reduce((acc, task) => {
-    acc[task.phase] = acc[task.phase] || { total: 0, completed: 0 };
-    acc[task.phase].total++;
-    if (task.completed) acc[task.phase].completed++;
-    return acc;
-  }, {} as Record<TaskPhase, { total: number; completed: number }>);
+  const phaseCompletion = {
+    DISTRIBUTION: tasks.every((t) => t.phase !== "DISTRIBUTION" || t.completed),
+    EDITING: tasks.every((t) => t.phase !== "EDITING" || t.completed),
+    RECORDING: tasks.every((t) => t.phase !== "RECORDING" || t.completed),
+  };
 
-  if (
-    tasksByPhase.DISTRIBUTION?.completed === tasksByPhase.DISTRIBUTION?.total
-  ) {
-    return VideoStatus.PUBLISHED;
-  }
-  if (tasksByPhase.EDITING?.completed === tasksByPhase.EDITING?.total) {
-    return VideoStatus.EDITING;
-  }
-  if (tasksByPhase.RECORDING?.completed === tasksByPhase.RECORDING?.total) {
-    return VideoStatus.RECORDING;
-  }
+  if (phaseCompletion.DISTRIBUTION) return VideoStatus.PUBLISHED;
+  if (phaseCompletion.EDITING) return VideoStatus.EDITING;
+  if (phaseCompletion.RECORDING) return VideoStatus.RECORDING;
   return VideoStatus.PLANNING;
 };
 
@@ -62,28 +53,49 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  if (!params.id) {
-    return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
-  }
-
   try {
+    const { id } = params;
+    if (!id) {
+      return NextResponse.json(
+        { error: "Task ID is required" },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
     const { completed } = body;
 
-    // First update the task
-    const updatedTask = await prisma.task.update({
-      where: { id: params.id },
-      data: { completed },
-      include: { video: { include: { tasks: true } } },
+    // Use a single transaction for both updates
+    const result = await prisma.$transaction(async (tx) => {
+      const task = await tx.task.update({
+        where: { id },
+        data: { completed },
+        include: {
+          video: {
+            include: {
+              tasks: true,
+            },
+          },
+        },
+      });
+
+      // Update video status in the same transaction
+      const updatedVideo = await tx.videoIdea.update({
+        where: { id: task.videoId },
+        data: {
+          status: determineVideoStatus(
+            task.video.tasks.map((t) => ({
+              phase: t.phase,
+              completed: t.id === id ? completed : t.completed,
+            }))
+          ),
+        },
+      });
+
+      return { ...task, video: { ...task.video, status: updatedVideo.status } };
     });
 
-    // Then update the video status
-    await prisma.videoIdea.update({
-      where: { id: updatedTask.videoId },
-      data: { status: determineVideoStatus(updatedTask.video.tasks) },
-    });
-
-    return NextResponse.json(updatedTask);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Error updating task:", error);
     return NextResponse.json(
