@@ -1,19 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TaskPhase } from "@prisma/client";
 import TaskItem from "./TaskItem";
-
-// Define the client-side task interface
-interface ClientTask {
-  id: string;
-  title: string;
-  isCompleted: boolean;
-  phase: TaskPhase;
-  order: number;
-  notes?: string | null;
-  videoIdeaId: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { ClientTask } from "@/types";
 
 interface TaskListProps {
   tasks: ClientTask[];
@@ -28,20 +16,19 @@ export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
     setLocalTasks(tasks);
   }, [tasks]);
 
-  const handleTaskUpdated = (updatedTask: ClientTask) => {
-    // Prevent state update if task is not found
-    if (!localTasks.some((task) => task.id === updatedTask.id)) return;
+  const handleTaskUpdated = useCallback(
+    (updatedTask: ClientTask) => {
+      const newTasks = localTasks.map((task) =>
+        task.id === updatedTask.id ? updatedTask : task
+      );
+      setLocalTasks(newTasks);
 
-    const newTasks = localTasks.map((task) =>
-      task.id === updatedTask.id ? updatedTask : task
-    );
-
-    setLocalTasks(newTasks);
-
-    if (onTasksUpdated) {
-      onTasksUpdated(newTasks);
-    }
-  };
+      if (onTasksUpdated) {
+        onTasksUpdated(newTasks);
+      }
+    },
+    [localTasks, onTasksUpdated]
+  );
 
   // Sort phases in the correct order
   const phaseOrder: TaskPhase[] = [
@@ -56,7 +43,7 @@ export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
   // Calculate completion stats
   const getCompletionStats = (tasks: ClientTask[]) => {
     const total = tasks.length;
-    const completed = tasks.filter((task) => task.isCompleted).length;
+    const completed = tasks.filter((task) => task.completed).length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { total, completed, percentage };
   };
@@ -64,7 +51,6 @@ export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
   return (
     <div className="space-y-4">
       {phaseOrder.map((phase) => {
-        // Filter tasks for this phase
         const phaseTasks = localTasks.filter((task) => task.phase === phase);
         if (phaseTasks.length === 0) return null;
 

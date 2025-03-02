@@ -1,32 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { TaskPhase } from "@prisma/client";
+import { VideoStatus, TaskPhase } from "@prisma/client";
 
-// Define an interface for the task data in the database
-interface TaskData {
-  id: string;
-  title: string;
-  completed: boolean;
-  phase: TaskPhase;
-  order: number;
-  notes?: string | null;
-  videoId: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+const determineVideoStatus = (
+  tasks: { phase: TaskPhase; completed: boolean }[]
+) => {
+  const tasksByPhase = tasks.reduce((acc, task) => {
+    acc[task.phase] = acc[task.phase] || { total: 0, completed: 0 };
+    acc[task.phase].total++;
+    if (task.completed) acc[task.phase].completed++;
+    return acc;
+  }, {} as Record<TaskPhase, { total: number; completed: number }>);
 
-// Define an interface for the client-side task representation
-interface ClientTask {
-  id: string;
-  title: string;
-  isCompleted: boolean;
-  phase: TaskPhase;
-  order: number;
-  notes?: string | null;
-  videoIdeaId: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+  if (
+    tasksByPhase.DISTRIBUTION?.completed === tasksByPhase.DISTRIBUTION?.total
+  ) {
+    return VideoStatus.PUBLISHED;
+  }
+  if (tasksByPhase.EDITING?.completed === tasksByPhase.EDITING?.total) {
+    return VideoStatus.EDITING;
+  }
+  if (tasksByPhase.RECORDING?.completed === tasksByPhase.RECORDING?.total) {
+    return VideoStatus.RECORDING;
+  }
+  return VideoStatus.PLANNING;
+};
 
 export async function GET(
   request: NextRequest,
@@ -64,45 +62,32 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  if (!params.id) {
+    return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
+  }
+
   try {
-    const id = params.id;
     const body = await request.json();
+    const { completed } = body;
 
-    console.log("Updating task:", id, "with data:", body);
-
-    // Map isCompleted to completed if it exists in the request
-    const updateData: Partial<TaskData> = {};
-
-    // Copy allowed fields
-    if (body.title !== undefined) updateData.title = body.title;
-    if (body.notes !== undefined) updateData.notes = body.notes;
-    if (body.phase !== undefined) updateData.phase = body.phase;
-    if (body.order !== undefined) updateData.order = body.order;
-
-    // Handle the isCompleted to completed mapping
-    if (body.isCompleted !== undefined) {
-      updateData.completed = Boolean(body.isCompleted);
-    }
-
+    // First update the task
     const updatedTask = await prisma.task.update({
-      where: { id },
-      data: updateData,
+      where: { id: params.id },
+      data: { completed },
+      include: { video: { include: { tasks: true } } },
     });
 
-    // Map completed back to isCompleted for the response
-    const clientTask: ClientTask = {
-      ...updatedTask,
-      isCompleted: updatedTask.completed,
-      videoIdeaId: updatedTask.videoId,
-    };
+    // Then update the video status
+    await prisma.videoIdea.update({
+      where: { id: updatedTask.videoId },
+      data: { status: determineVideoStatus(updatedTask.video.tasks) },
+    });
 
-    console.log("Task updated successfully:", clientTask);
-    return NextResponse.json(clientTask);
+    return NextResponse.json(updatedTask);
   } catch (error) {
     console.error("Error updating task:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: "Failed to update task", details: errorMessage },
+      { error: "Failed to update task" },
       { status: 500 }
     );
   }

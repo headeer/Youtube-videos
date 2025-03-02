@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import VideoDetailClient from "@/components/VideoDetailClient";
 import { prisma } from "@/lib/prisma";
-import { VideoStatus } from "@prisma/client";
+import VideoDetailClient from "@/components/VideoDetailClient";
+import { VideoIdea } from "@/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,20 +21,6 @@ interface VideoMetadata {
   category: string;
 }
 
-interface VideoIdea {
-  id: string;
-  title: string;
-  description: string | null;
-  script: string | null;
-  metadata: VideoMetadata | null;
-  thumbnailUrl: string | null;
-  status: VideoStatus;
-  isUploaded: boolean;
-  plannedDate: Date;
-  finishDate: Date | null;
-  tasks: Task[];
-}
-
 async function getVideo(id: string): Promise<VideoIdea | null> {
   try {
     const video = await prisma.videoIdea.findUnique({
@@ -52,7 +38,19 @@ async function getVideo(id: string): Promise<VideoIdea | null> {
       return null;
     }
 
-    return video as VideoIdea;
+    // Convert Prisma types to our client types
+    return {
+      ...video,
+      metadata: video.metadata as Record<string, unknown> | undefined,
+      tasks: video.tasks.map((task) => ({
+        ...task,
+        createdAt: new Date(task.createdAt),
+        updatedAt: new Date(task.updatedAt),
+      })),
+      createdAt: new Date(video.createdAt),
+      updatedAt: new Date(video.updatedAt),
+      plannedDate: new Date(video.plannedDate),
+    };
   } catch (error) {
     console.error("Error fetching video:", error);
     return null;
@@ -64,7 +62,8 @@ export default async function VideoDetailPage({
 }: {
   params: { id: string };
 }) {
-  if (!params?.id) {
+  // Validate params.id before using it
+  if (!params?.id || typeof params.id !== "string") {
     notFound();
   }
 
