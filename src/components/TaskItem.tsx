@@ -20,8 +20,8 @@ interface TaskItemProps {
   onTaskUpdated?: (updatedTask: ClientTask) => void;
 }
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
+const MAX_RETRIES = 5;
+const INITIAL_RETRY_DELAY = 1000; // 1 second
 
 export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +42,16 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
       attempt = 0
     ): Promise<ClientTask | null> => {
       try {
+        // Exponential backoff delay
+        const delay =
+          attempt > 0 ? INITIAL_RETRY_DELAY * Math.pow(2, attempt - 1) : 0;
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
         const response = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
           headers: {
@@ -50,7 +60,10 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
           body: JSON.stringify({
             isCompleted: newCompletedState,
           }),
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -60,9 +73,18 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
         const updatedTask = await response.json();
         return updatedTask;
       } catch (err) {
-        if (attempt < MAX_RETRIES) {
-          // Wait before retrying
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+        const isConnectionError =
+          err instanceof Error &&
+          (err.name === "AbortError" ||
+            err.message.includes("Failed to fetch") ||
+            err.message.includes("Network Error") ||
+            err.message.includes("Connection reset") ||
+            err.message.includes("SSL connection"));
+
+        if (isConnectionError && attempt < MAX_RETRIES) {
+          console.log(
+            `Retrying update (attempt ${attempt + 1}/${MAX_RETRIES})`
+          );
           return updateTask(newCompletedState, attempt + 1);
         }
         throw err;
@@ -94,15 +116,27 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
       }
     } catch (err) {
       console.error("Error updating task:", err);
-      setError(
+      const errorMessage =
         err instanceof Error
           ? err.message
-          : "Failed to update task. Please try again."
+          : "Failed to update task. Please try again.";
+
+      setError(
+        errorMessage.includes("Failed to fetch") ||
+          errorMessage.includes("Network Error") ||
+          errorMessage.includes("Connection reset") ||
+          errorMessage.includes("SSL connection")
+          ? "Connection error. Changes will be saved when connection is restored."
+          : errorMessage
       );
 
-      // Revert optimistic update if all retries failed
-      setIsCompleted(task.isCompleted);
-      setPendingUpdate(null);
+      // Only revert the optimistic update if it's not a connection error
+      if (
+        !errorMessage.includes("Connection") &&
+        !errorMessage.includes("Network")
+      ) {
+        setIsCompleted(task.isCompleted);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -125,10 +159,21 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
           }
         } catch (err) {
           console.error("Retry failed:", err);
+          // Don't show error for connection issues, as we'll keep retrying
+          if (
+            err instanceof Error &&
+            !err.message.includes("Connection") &&
+            !err.message.includes("Network")
+          ) {
+            setError(err.message);
+          }
         }
       };
 
-      const timeoutId = setTimeout(retryUpdate, RETRY_DELAY);
+      const timeoutId = setTimeout(
+        retryUpdate,
+        INITIAL_RETRY_DELAY * Math.pow(2, retryCount)
+      );
       return () => clearTimeout(timeoutId);
     }
   }, [pendingUpdate, isLoading, retryCount, updateTask, onTaskUpdated]);
