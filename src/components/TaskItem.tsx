@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TaskPhase } from "@prisma/client";
 import { CheckIcon, XCircleIcon } from "@heroicons/react/24/outline";
 
@@ -20,11 +20,118 @@ interface TaskItemProps {
   onTaskUpdated?: (updatedTask: ClientTask) => void;
 }
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
 export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Local state to immediately reflect changes
+  const [retryCount, setRetryCount] = useState(0);
   const [isCompleted, setIsCompleted] = useState(task.isCompleted);
+  const [pendingUpdate, setPendingUpdate] = useState<boolean | null>(null);
+
+  // Sync local state with prop when it changes
+  useEffect(() => {
+    setIsCompleted(task.isCompleted);
+    setPendingUpdate(null);
+  }, [task.isCompleted]);
+
+  const updateTask = useCallback(
+    async (
+      newCompletedState: boolean,
+      attempt = 0
+    ): Promise<ClientTask | null> => {
+      try {
+        const response = await fetch(`/api/tasks/${task.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            isCompleted: newCompletedState,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to update task");
+        }
+
+        const updatedTask = await response.json();
+        return updatedTask;
+      } catch (err) {
+        if (attempt < MAX_RETRIES) {
+          // Wait before retrying
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+          return updateTask(newCompletedState, attempt + 1);
+        }
+        throw err;
+      }
+    },
+    [task.id]
+  );
+
+  const handleToggleComplete = async () => {
+    if (isLoading || pendingUpdate !== null) return;
+
+    const newCompletedState = !isCompleted;
+    setIsLoading(true);
+    setError(null);
+    setPendingUpdate(newCompletedState);
+
+    try {
+      // Optimistically update UI
+      setIsCompleted(newCompletedState);
+
+      const updatedTask = await updateTask(newCompletedState);
+
+      if (updatedTask) {
+        if (onTaskUpdated) {
+          onTaskUpdated(updatedTask);
+        }
+        setPendingUpdate(null);
+        setRetryCount(0);
+      }
+    } catch (err) {
+      console.error("Error updating task:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update task. Please try again."
+      );
+
+      // Revert optimistic update if all retries failed
+      setIsCompleted(task.isCompleted);
+      setPendingUpdate(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Retry failed updates when connection is restored
+  useEffect(() => {
+    if (pendingUpdate !== null && !isLoading && retryCount < MAX_RETRIES) {
+      const retryUpdate = async () => {
+        setRetryCount((prev) => prev + 1);
+        try {
+          const updatedTask = await updateTask(pendingUpdate);
+          if (updatedTask) {
+            if (onTaskUpdated) {
+              onTaskUpdated(updatedTask);
+            }
+            setPendingUpdate(null);
+            setRetryCount(0);
+            setError(null);
+          }
+        } catch (err) {
+          console.error("Retry failed:", err);
+        }
+      };
+
+      const timeoutId = setTimeout(retryUpdate, RETRY_DELAY);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [pendingUpdate, isLoading, retryCount, updateTask, onTaskUpdated]);
 
   const getPhaseColor = (phase: TaskPhase) => {
     switch (phase) {
@@ -45,56 +152,6 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
     }
   };
 
-  const handleToggleComplete = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // Update local state immediately for better UX
-      const newCompletedState = !isCompleted;
-      setIsCompleted(newCompletedState);
-
-      console.log(
-        `Updating task ${task.id}, setting isCompleted to ${newCompletedState}`
-      );
-
-      const response = await fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          isCompleted: newCompletedState,
-          // Remove any fields that might not exist in the database
-          // plannedDate: undefined
-        }),
-      });
-
-      if (!response.ok) {
-        // Revert local state if API call fails
-        setIsCompleted(!newCompletedState);
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to update task");
-      }
-
-      const updatedTask = await response.json();
-      console.log("Task updated successfully:", updatedTask);
-
-      if (onTaskUpdated) {
-        onTaskUpdated(updatedTask);
-      }
-    } catch (err) {
-      console.error("Error updating task:", err);
-      setError(
-        err instanceof Error ? err.message : "An unknown error occurred"
-      );
-      // Make sure to revert the local state if there was an error
-      setIsCompleted(task.isCompleted);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
       <div className="flex items-center space-x-3">
@@ -105,11 +162,18 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
             isCompleted
               ? "bg-green-500 border-green-500 text-white"
               : "border-2 border-gray-300 dark:border-gray-500 bg-transparent hover:border-green-500"
-          } flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200`}
+          } flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200 ${
+            pendingUpdate !== null ? "opacity-50" : ""
+          }`}
           aria-label={isCompleted ? "Mark as incomplete" : "Mark as complete"}
         >
           {isCompleted && (
             <CheckIcon className="h-4 w-4 text-white" aria-hidden="true" />
+          )}
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-3 h-3 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
+            </div>
           )}
         </button>
         <span
@@ -120,6 +184,11 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
           }`}
         >
           {task.title}
+          {pendingUpdate !== null && retryCount > 0 && (
+            <span className="ml-2 text-xs text-yellow-500">
+              Retrying... ({retryCount}/{MAX_RETRIES})
+            </span>
+          )}
         </span>
       </div>
       <div className="flex items-center">

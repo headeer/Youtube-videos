@@ -29,6 +29,9 @@ export default function TaskList({ tasks, onTasksUpdated }: TaskListProps) {
   }, [tasks]);
 
   const handleTaskUpdated = (updatedTask: ClientTask) => {
+    // Prevent state update if task is not found
+    if (!localTasks.some((task) => task.id === updatedTask.id)) return;
+
     const newTasks = localTasks.map((task) =>
       task.id === updatedTask.id ? updatedTask : task
     );
