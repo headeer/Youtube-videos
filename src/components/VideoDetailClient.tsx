@@ -228,18 +228,21 @@ export default function VideoDetailClient({ video }: VideoDetailClientProps) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="py-6">
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 min-w-0">
                 <Link
                   href="/"
-                  className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+                  className="flex-shrink-0 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
                 >
                   <ArrowLeftIcon className="h-5 w-5" />
                 </Link>
-                <h1 className="text-3xl font-bold leading-tight tracking-tight text-white">
+                <h1
+                  className="text-3xl font-bold leading-tight tracking-tight text-white truncate"
+                  title={currentVideo.title}
+                >
                   {currentVideo.title}
                 </h1>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 flex-shrink-0">
                 {isEditing ? (
                   <div className="flex gap-3">
                     <button

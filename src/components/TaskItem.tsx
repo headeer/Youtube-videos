@@ -70,8 +70,8 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
   };
 
   return (
-    <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-      <div className="flex items-center space-x-3">
+    <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0 gap-3">
+      <div className="flex items-center space-x-3 min-w-0">
         <button
           onClick={handleToggleComplete}
           disabled={isLoading}
@@ -92,18 +92,19 @@ export default function TaskItem({ task, onTaskUpdated }: TaskItemProps) {
           )}
         </button>
         <span
-          className={`text-sm ${
+          className={`text-sm truncate ${
             optimisticCompleted
               ? "line-through text-gray-500"
               : "text-gray-700 dark:text-gray-200"
           }`}
+          title={task.title}
         >
           {task.title}
         </span>
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center flex-shrink-0">
         <span
-          className={`text-xs px-2 py-1 rounded-full ${getPhaseColor(
+          className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${getPhaseColor(
             task.phase
           )}`}
         >
